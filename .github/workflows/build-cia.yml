@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build 3DS ELF with devkitARM
-        run: docker run --rm -v "$PWD/ctr:/work" -w /work devkitpro/devkitarm:latest make
+        run: docker run --rm -v "$PWD/ctr:/work" -w /work devkitpro/devkitarm:latest sh -lc 'make clean || true; make'
       - name: Download makerom
         run: |
           curl -L --fail -o /tmp/makerom.zip https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip
