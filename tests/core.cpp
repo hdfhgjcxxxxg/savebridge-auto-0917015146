@@ -1,0 +1,4 @@
+#include "../ctr/source/package.hpp"
+#include <iostream>
+#include <iomanip>
+int main(int argc,char**argv){try{if(argc<2)throw std::runtime_error("usage: pack|hash|restore|validate");std::string mode=argv[1];if(mode=="pack"){if(argc!=4)throw std::runtime_error("usage: pack DIR PACKAGE");sb::write(argv[3],sb::snapshot(argv[2]));return 0;}if(argc<3)throw std::runtime_error("missing package");auto b=sb::read(argv[2]);if(mode=="hash"){for(auto v:sha256(b))std::cout<<std::hex<<std::setfill('0')<<std::setw(2)<<int(v);return 0;}auto t=sb::decode(b);if(mode=="restore"){if(argc!=4)throw std::runtime_error("usage: restore PACKAGE DIR");sb::clear(argv[3]);sb::install(argv[3],b);}else if(mode=="validate"){sb::need(sb::encode(t)==b,"noncanonical");}else return 3;return 0;}catch(const std::exception&e){std::cerr<<e.what();return 2;}}

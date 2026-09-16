@@ -1,0 +1,55 @@
+name: Build SaveBridge CIA
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+jobs:
+  cia:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build 3DS ELF with devkitARM
+        run: docker run --rm -v "$PWD/ctr:/work" -w /work devkitpro/devkitarm:latest make
+      - name: Download makerom
+        run: |
+          curl -L --fail -o /tmp/makerom.zip https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip
+          unzip -o /tmp/makerom.zip -d /tmp/makerom
+          chmod +x /tmp/makerom/makerom
+      - name: Build CIA
+        run: |
+          /tmp/makerom/makerom -f cia -o SaveBridgeMulti-v0.3.cia \
+            -elf ctr/SaveBridgeMulti.elf -rsf ctr/app.rsf \
+            -icon ctr/SaveBridgeMulti.smdh -ver 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SaveBridgeMulti-CIA
+          path: SaveBridgeMulti-v0.3.cia
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android tools
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+      - name: Build and sign APK
+        run: |
+          SDK="$ANDROID_SDK_ROOT"; BT="$SDK/build-tools/34.0.0"; PLAT="$SDK/platforms/android-34/android.jar"; O=$(mktemp -d)
+          mkdir -p "$O/gen" "$O/classes" "$O/dex"
+          "$BT/aapt2" compile --dir android/res -o "$O/res.zip"
+          "$BT/aapt2" link -o "$O/base.apk" -I "$PLAT" --manifest android/AndroidManifest.xml "$O/res.zip" --java "$O/gen" --min-sdk-version 26 --target-sdk-version 34 --version-code 5 --version-name 0.3.2
+          find android/src "$O/gen" -name '*.java' > "$O/sources.txt"
+          javac -source 8 -target 8 -cp "$PLAT" -d "$O/classes" @"$O/sources.txt"
+          (cd "$O/classes" && zip -qr "$O/classes.jar" .)
+          "$BT/d8" --lib "$PLAT" --min-api 26 --output "$O/dex" "$O/classes.jar"
+          cp "$O/base.apk" "$O/with-dex.apk"; (cd "$O/dex" && zip -q "$O/with-dex.apk" classes.dex)
+          "$BT/zipalign" -f 4 "$O/with-dex.apk" "$O/aligned.apk"
+          keytool -genkeypair -keystore "$O/debug.keystore" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=SaveBridge Multi,O=SaveBridge,C=JP'
+          "$BT/apksigner" sign --ks "$O/debug.keystore" --ks-pass pass:android --key-pass pass:android --out SaveBridge-MultiSync-v0.3.2.apk "$O/aligned.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SaveBridgeMulti-APK
+          path: SaveBridge-MultiSync-v0.3.2.apk
